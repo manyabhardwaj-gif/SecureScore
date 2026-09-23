@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecureScore - Cybersecurity Risk Assessment</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{range(1,1000)|random}}">
+</head>
+<body>
+    <div class="container">
+        <!-- HEADER -->
+        <div class="header">
+            <h1>🔐 SecureScore</h1>
+            <p>Cybersecurity Risk Assessment Tool</p>
+            <p class="company-name">{{ company_name }}</p>
+        </div>
+
+        <!-- BUSINESS NAME INPUT -->
+        <div class="form-container" id="businessNameSection">
+            <div class="welcome-box">
+                <h2>Welcome to SecureScore!</h2>
+                <p>This tool assesses your small business cybersecurity posture by asking 30 questions.</p>
+                <p>It should take approximately 10-15 minutes.</p>
+                
+                <div class="info-box">
+                    <h3>Assessment Covers:</h3>
+                    <ul>
+                        <li>📡 Network Security (10 questions)</li>
+                        <li>👥 Human Factors (12 questions)</li>
+                        <li>💾 Data Protection (8 questions)</li>
+                    </ul>
+                </div>
+
+                <div class="input-group">
+                    <label for="businessName">Business Name:</label>
+                    <input type="text" id="businessName" placeholder="Enter your business name" value="Test Business">
+                    <button class="btn btn-primary" onclick="startQuestionnaire()">Start Assessment</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- QUESTIONNAIRE SECTION -->
+        <div class="form-container" id="questionnaireSection" style="display: none;">
+            <div class="progress-container">
+                <div class="progress-bar" id="progressBar"></div>
+            </div>
+            <p class="progress-text" id="progressText">Question 1 of {{ total_questions }}</p>
+
+            <form id="assessmentForm">
+                <div id="questionsContainer"></div>
+
+                <div class="button-group">
+                    <button type="button" class="btn btn-secondary" onclick="previousQuestion()" id="prevBtn" style="display: none;">Previous</button>
+                    <button type="button" class="btn btn-primary" onclick="nextQuestion()" id="nextBtn">Next</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- LOADING SECTION -->
+        <div class="form-container" id="loadingSection" style="display: none;">
+            <div class="loading">
+                <div class="spinner"></div>
+                <h2>Analyzing Your Assessment...</h2>
+                <p>Calculating risk scores and generating recommendations...</p>
+            </div>
+        </div>
+
+        <!-- RESULTS SECTION -->
+        <div class="form-container" id="resultsSection" style="display: none;">
+            <div id="resultsContent"></div>
+        </div>
+    </div>
+
+    <!-- SCRIPT -->
+    <script>
+        // Data from server
+        const questions = {{ questions|tojson }};
+        let currentQuestion = 0;
+        let answers = {};
+        let businessName = '';
+
+        // Initialize questions
+        function initQuestions() {
+            const container = document.getElementById('questionsContainer');
+            container.innerHTML = '';
+            
+            const q = questions[currentQuestion];
+            const questionHTML = `
+                <div class="question-card">
+                    <h3>${q.text}</h3>
+                    <p class="question-category">Category: ${q.category}</p>
+                    
+                    <div class="options">
+                        <label class="radio-label">
+                            <input type="radio" name="answer" value="yes" ${answers[q.id] === 'yes' ? 'checked' : ''}>
+                            <span class="radio-text">Yes / Excellent</span>
+                        </label>
+                        
+                        <label class="radio-label">
+                            <input type="radio" name="answer" value="partial" ${answers[q.id] === 'partial' ? 'checked' : ''}>
+                            <span class="radio-text">Partial / Sometimes</span>
+                        </label>
+                        
+                        <label class="radio-label">
+                            <input type="radio" name="answer" value="no" ${answers[q.id] === 'no' ? 'checked' : ''}>
+                            <span class="radio-text">No / Not Implemented</span>
+                        </label>
+                    </div>
+                </div>
+            `;
+            
+            container.innerHTML = questionHTML;
+            updateProgress();
+        }
+
+        function startQuestionnaire() {
+            businessName = document.getElementById('businessName').value || 'Test Business';
+            if (!businessName) {
+                alert('Please enter a business name');
+                return;
+            }
+            
+            document.getElementById('businessNameSection').style.display = 'none';
+            document.getElementById('questionnaireSection').style.display = 'block';
+            currentQuestion = 0;
+            initQuestions();
+        }
+
+        function nextQuestion() {
+            const selected = document.querySelector('input[name="answer"]:checked');
+            if (!selected) {
+                alert('Please select an answer');
+                return;
+            }
+            
+            answers[questions[currentQuestion].id] = selected.value;
+            
+            if (currentQuestion < questions.length - 1) {
+                currentQuestion++;
+                initQuestions();
+            } else {
+                submitAssessment();
+            }
+        }
+
+        function previousQuestion() {
+            const selected = document.querySelector('input[name="answer"]:checked');
+            if (selected) {
+                answers[questions[currentQuestion].id] = selected.value;
+            }
+            
+            if (currentQuestion > 0) {
+                currentQuestion--;
+                initQuestions();
+            }
+        }
+
+        function updateProgress() {
+            const progress = ((currentQuestion + 1) / questions.length) * 100;
+            document.getElementById('progressBar').style.width = progress + '%';
+            document.getElementById('progressText').textContent = `Question ${currentQuestion + 1} of ${questions.length}`;
+            
+            // Update button visibility
+            document.getElementById('prevBtn').style.display = currentQuestion > 0 ? 'block' : 'none';
+            document.getElementById('nextBtn').textContent = currentQuestion === questions.length - 1 ? 'Submit' : 'Next';
+        }
+
+        function submitAssessment() {
+            const selected = document.querySelector('input[name="answer"]:checked');
+            if (selected) {
+                answers[questions[currentQuestion].id] = selected.value;
+            }
+            
+            document.getElementById('questionnaireSection').style.display = 'none';
+            document.getElementById('loadingSection').style.display = 'block';
+            
+            fetch('/api/submit-assessment', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    business_name: businessName,
+                    answers: answers
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    displayResults(data);
+                } else {
+                    alert('Error: ' + data.error);
+                    location.reload();
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred');
+                location.reload();
+            });
+        }
+
+        function displayResults(data) {
+            document.getElementById('loadingSection').style.display = 'none';
+            document.getElementById('resultsSection').style.display = 'block';
+            
+            // Determine risk color
+            let riskColor = '#2ecc71'; // green
+            if (data.overall_score >= 50) riskColor = '#e74c3c'; // red
+            else if (data.overall_score >= 20) riskColor = '#f39c12'; // orange
+            
+            // Build results HTML
+            let resultsHTML = `
+                <div class="results-header">
+                    <h2>Assessment Complete!</h2>
+                    <p class="business-name">Business: ${data.business_name}</p>
+                </div>
+                
+                <div class="overall-score-card" style="border-left-color: ${riskColor};">
+                    <h3>Overall Risk Score</h3>
+                    <div class="score-display">${data.overall_score}</div>
+                    <p class="risk-level" style="color: ${riskColor};">${data.risk_level}</p>
+                </div>
+                
+                <div class="categories-grid">
+            `;
+            
+            // Add category scores
+            for (const [category, score] of Object.entries(data.category_scores)) {
+                let catColor = '#2ecc71';
+                if (score >= 50) catColor = '#e74c3c';
+                else if (score >= 20) catColor = '#f39c12';
+                
+                resultsHTML += `
+                    <div class="category-card" style="border-top-color: ${catColor};">
+                        <h4>${category}</h4>
+                        <div class="category-score" style="color: ${catColor};">${score}</div>
+                    </div>
+                `;
+            }
+            
+            resultsHTML += `</div>`;
+            
+            // Add recommendations
+            if (data.recommendations.length > 0) {
+                resultsHTML += `
+                    <div class="recommendations-section">
+                        <h3>Recommended Actions</h3>
+                        <ul class="recommendations-list">
+                `;
+                
+                data.recommendations.forEach(rec => {
+                    const isCritical = rec.includes('CRITICAL');
+                    const color = isCritical ? '#e74c3c' : '#f39c12';
+                    resultsHTML += `
+                        <li style="border-left-color: ${color}; background: ${color}15;">
+                            ${rec}
+                        </li>
+                    `;
+                });
+                
+                resultsHTML += `
+                        </ul>
+                    </div>
+                `;
+            }
+            
+            resultsHTML += `
+                <div class="button-group">
+                    <button class="btn btn-primary" onclick="location.reload()">Start New Assessment</button>
+                    <button class="btn btn-secondary" onclick="downloadPDF()">Download Report (PDF)</button>
+                </div>
+            `;
+            
+            // Store results in sessionStorage for PDF download
+            sessionStorage.setItem('assessmentResults', JSON.stringify(data));
+            
+            document.getElementById('resultsContent').innerHTML = resultsHTML;
+        }
+
+        function downloadPDF() {
+            alert('PDF download feature coming soon!\n\nFor now, you can:\n1. Right-click and save page as\n2. Use browser print to PDF');
+        }
+
+        // Initialize on load
+        window.onload = function() {
+            updateProgress();
+        };
+    </script>
+</body>
+</html>
